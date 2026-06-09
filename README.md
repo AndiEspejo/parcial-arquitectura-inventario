@@ -1,7 +1,7 @@
 # API REST de Inventario de Almacenes
 
 API RESTful para la gestión de inventario de productos en múltiples almacenes.
-Construida con **Node.js + Express + PostgreSQL + TypeScript, sin ORM.
+Construida con **Node.js + Express + PostgreSQL + TypeScript**, sin ORM.
 
 ---
 
