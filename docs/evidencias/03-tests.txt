@@ -1,0 +1,52 @@
+======================================================================
+EVIDENCIA 03 — Resultados de npm test
+Fecha: 2026-06-09
+Comando: DB_HOST=localhost DB_PORT=5433 DB_NAME=inventory DB_USER=postgres DB_PASSWORD=postgres npm test
+======================================================================
+
+> warehouse-inventory-api@1.0.0 test
+> jest --forceExit --detectOpenHandles
+
+ts-jest[ts-jest-transformer] (WARN) Define `ts-jest` config under `globals` is deprecated. Please do
+transform: {
+    <transform_regex>: ['ts-jest', { /* ts-jest config goes here in Jest */ }],
+},
+See more at https://kulshekhar.github.io/ts-jest/docs/getting-started/presets#advanced
+PASS tests/api.test.ts (8.249 s)
+  API Version middleware
+    ✓ returns 400 when X-API-Version header is missing (108 ms)
+    ✓ returns 406 when X-API-Version header has unsupported value (7 ms)
+    ✓ echoes X-API-Version in response header on valid request (53 ms)
+  GET /api/inventory
+    ✓ returns 400 when warehouseId param is missing (5 ms)
+    ✓ returns 400 when warehouseId is not a positive integer (6 ms)
+    ✓ returns 404 when warehouse does not exist (6 ms)
+    ✓ returns 200 with inventory data and _links for a valid warehouse (7 ms)
+    ✓ each product in inventory response has _links.self and _links.warehouse (6 ms)
+  GET /api/warehouses
+    ✓ returns 200 with a list of warehouses (5 ms)
+    ✓ returns 200 for an existing warehouse id (7 ms)
+    ✓ returns 404 for a non-existent warehouse id (7 ms)
+    ✓ returns 400 for a non-integer warehouse id (10 ms)
+  POST /api/products
+    ✓ returns 400 on missing required fields (72 ms)
+    ✓ returns 400 when price is negative (4 ms)
+    ✓ returns 400 when quantity is negative (4 ms)
+    ✓ returns 404 when the warehouse does not exist (5 ms)
+    ✓ returns 201 with Location header when product is created (8 ms)
+    ✓ returns 409 on duplicate SKU (25 ms)
+  GET /api/products/:id
+    ✓ returns 200 for an existing product (14 ms)
+    ✓ returns 404 for a non-existent product (6 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       20 passed, 20 total
+Snapshots:   0 total
+Time:        9.318 s, estimated 15 s
+Ran all test suites.
+
+======================================================================
+NOTA: Los tests son de integración y requieren el contenedor DB corriendo.
+      Advertencia ts-jest sobre `globals` es deprecation warning, no error.
+      No hay tests fallidos.
+======================================================================

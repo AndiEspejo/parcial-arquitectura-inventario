@@ -1,0 +1,405 @@
+openapi: 3.0.3
+info:
+  title: Warehouse Inventory API
+  description: |
+    RESTful API for managing product inventory across multiple warehouses.
+
+    **API Versioning**: All `/api/*` endpoints require the `X-API-Version: 1` request header.
+    Missing header → 400. Unsupported version → 406.
+
+    **HATEOAS**: Every response includes a `_links` object following HAL conventions.
+  version: "1.0.0"
+  contact:
+    name: Arquitectura de Software — Parcial Práctico
+
+servers:
+  - url: http://localhost:3001
+    description: Local development (Docker Compose, host port 3001 → container 3000)
+
+# ---------------------------------------------------------------------------
+# Reusable security scheme for the custom version header
+# ---------------------------------------------------------------------------
+components:
+  parameters:
+    ApiVersionHeader:
+      name: X-API-Version
+      in: header
+      required: true
+      description: API version to use. Only "1" is currently supported.
+      schema:
+        type: string
+        enum: ["1"]
+      example: "1"
+
+  schemas:
+    # --- HAL link ---
+    HalLink:
+      type: object
+      properties:
+        href:
+          type: string
+          format: uri
+          example: "http://localhost:3001/api/warehouses/1"
+        method:
+          type: string
+          example: "GET"
+      required: [href, method]
+
+    HalLinks:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/HalLink'
+      example:
+        self:
+          href: "http://localhost:3001/api/warehouses/1"
+          method: GET
+
+    # --- Warehouse ---
+    Warehouse:
+      type: object
+      properties:
+        id:         { type: integer, example: 1 }
+        name:       { type: string,  example: "Central Distribution Center" }
+        city:       { type: string,  example: "Buenos Aires" }
+        address:    { type: string,  example: "Av. San Martín 1450, CABA" }
+        created_at: { type: string,  format: date-time }
+        _links:     { $ref: '#/components/schemas/HalLinks' }
+
+    WarehouseInput:
+      type: object
+      required: [name, city, address]
+      properties:
+        name:    { type: string, example: "South Logistics Hub" }
+        city:    { type: string, example: "Rosario" }
+        address: { type: string, example: "Av. del Trabajo 880, Rosario" }
+
+    # --- Product ---
+    Product:
+      type: object
+      properties:
+        id:           { type: integer, example: 1 }
+        warehouse_id: { type: integer, example: 1 }
+        name:         { type: string,  example: "Laptop ProBook 450" }
+        sku:          { type: string,  example: "SKU-LP-001" }
+        description:  { type: string,  nullable: true, example: "Business laptop 15.6\" i7" }
+        price:        { type: string,  example: "1299.99" }
+        quantity:     { type: integer, example: 45 }
+        created_at:   { type: string,  format: date-time }
+        _links:       { $ref: '#/components/schemas/HalLinks' }
+
+    ProductInput:
+      type: object
+      required: [name, sku, price, quantity, warehouseId]
+      properties:
+        name:        { type: string,  example: "Laptop ProBook 450" }
+        sku:         { type: string,  example: "SKU-LP-001" }
+        description: { type: string,  example: "Business laptop 15.6\" i7" }
+        price:       { type: number,  format: float, minimum: 0, example: 1299.99 }
+        quantity:    { type: integer, minimum: 0, example: 45 }
+        warehouseId: { type: integer, minimum: 1, example: 1 }
+
+    # --- Inventory ---
+    InventoryItem:
+      type: object
+      properties:
+        id:          { type: integer }
+        name:        { type: string }
+        sku:         { type: string }
+        description: { type: string, nullable: true }
+        price:       { type: string }
+        quantity:    { type: integer }
+        created_at:  { type: string, format: date-time }
+        _links:      { $ref: '#/components/schemas/HalLinks' }
+
+    InventoryData:
+      type: object
+      properties:
+        warehouse:
+          $ref: '#/components/schemas/Warehouse'
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+        totalProducts:
+          type: integer
+          example: 3
+
+    # --- Errors ---
+    ErrorResponse:
+      type: object
+      properties:
+        error:   { type: string, example: "Not Found" }
+        message: { type: string, example: "Warehouse with id 99 does not exist." }
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        error:   { type: string, example: "Validation Error" }
+        message: { type: string, example: "Request body validation failed." }
+        errors:
+          type: array
+          items: { type: string }
+          example: ["name is required and must be a non-empty string."]
+
+    VersionErrorResponse:
+      type: object
+      properties:
+        error:            { type: string }
+        message:          { type: string }
+        requiredHeader:   { type: string }
+        supportedVersions:
+          type: array
+          items: { type: string }
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+paths:
+
+  # ---------- Inventory ----------
+  /api/inventory:
+    get:
+      summary: Get warehouse inventory
+      description: Returns all products (with stock) for a given warehouse.
+      operationId: getInventory
+      tags: [Inventory]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersionHeader'
+        - name: warehouseId
+          in: query
+          required: true
+          description: Primary key of the target warehouse.
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        "200":
+          description: Inventory retrieved successfully.
+          headers:
+            X-API-Version:
+              schema: { type: string }
+              description: Echoed negotiated API version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:    { $ref: '#/components/schemas/InventoryData' }
+                  _links:  { $ref: '#/components/schemas/HalLinks' }
+        "400":
+          description: Missing or invalid warehouseId parameter, or missing X-API-Version header.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/VersionErrorResponse'
+        "404":
+          description: Warehouse not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "406":
+          description: Unsupported API version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionErrorResponse' }
+
+  # ---------- Warehouses ----------
+  /api/warehouses:
+    get:
+      summary: List all warehouses
+      operationId: listWarehouses
+      tags: [Warehouses]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersionHeader'
+      responses:
+        "200":
+          description: List of warehouses.
+          headers:
+            X-API-Version:
+              schema: { type: string }
+              description: Echoed negotiated API version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Warehouse' }
+                  _links: { $ref: '#/components/schemas/HalLinks' }
+        "400":
+          description: Missing X-API-Version header.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionErrorResponse' }
+        "406":
+          description: Unsupported API version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionErrorResponse' }
+
+    post:
+      summary: Create a warehouse
+      operationId: createWarehouse
+      tags: [Warehouses]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersionHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WarehouseInput' }
+      responses:
+        "201":
+          description: Warehouse created.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+              description: URL of the newly created warehouse.
+            X-API-Version:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Warehouse' }
+        "400":
+          description: Validation error or missing X-API-Version header.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+                  - $ref: '#/components/schemas/VersionErrorResponse'
+
+  /api/warehouses/{id}:
+    get:
+      summary: Get a warehouse by id
+      operationId: getWarehouse
+      tags: [Warehouses]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersionHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          example: 1
+      responses:
+        "200":
+          description: Warehouse found.
+          headers:
+            X-API-Version:
+              schema: { type: string }
+              description: Echoed negotiated API version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Warehouse' }
+        "400":
+          description: Invalid id format.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "404":
+          description: Warehouse not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  # ---------- Products ----------
+  /api/products:
+    post:
+      summary: Register a product
+      description: Creates a new product associated with a warehouse, with initial stock.
+      operationId: createProduct
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersionHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        "201":
+          description: Product created.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+              description: URL of the newly created product.
+            X-API-Version:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Product' }
+        "400":
+          description: Validation error or missing X-API-Version header.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+                  - $ref: '#/components/schemas/VersionErrorResponse'
+        "404":
+          description: Warehouse not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "409":
+          description: Duplicate SKU.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/products/{id}:
+    get:
+      summary: Get a product by id
+      operationId: getProduct
+      tags: [Products]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersionHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          example: 1
+      responses:
+        "200":
+          description: Product found.
+          headers:
+            X-API-Version:
+              schema: { type: string }
+              description: Echoed negotiated API version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Product' }
+        "400":
+          description: Invalid id format.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "404":
+          description: Product not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+tags:
+  - name: Inventory
+    description: Inventory queries by warehouse
+  - name: Warehouses
+    description: Warehouse management
+  - name: Products
+    description: Product management

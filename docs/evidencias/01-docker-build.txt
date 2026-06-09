@@ -1,0 +1,59 @@
+======================================================================
+EVIDENCIA 01 — Docker Build y Estado de Contenedores
+Fecha: 2026-06-09
+======================================================================
+
+--- Build relevante (últimas etapas del docker compose up --build) ---
+
+#16 [build 7/7] RUN npm run build
+#16 0.336
+#16 0.336 > warehouse-inventory-api@1.0.0 build
+#16 0.336 > tsc
+#16 DONE 1.4s
+
+#17 [runtime 6/7] COPY --from=build /app/dist ./dist
+#17 DONE 0.1s
+
+#18 [runtime 7/7] COPY docs/ ./docs/
+#18 DONE 0.1s
+
+#19 exporting to image
+#19 exporting layers 0.8s done
+#19 exporting manifest sha256:21b1c... done
+#19 exporting config sha256:dd2c8... done
+#19 unpacking to docker.io/library/arquisoftware-api:latest 0.3s done
+#19 DONE 1.3s
+
+ Image arquisoftware-api Built
+ Container arquisoftware-db-1 Started
+ Container arquisoftware-db-1 Healthy
+ Container arquisoftware-api-1 Started
+
+Nota: El puerto host del DB se cambió de 5432 a 5433 (puerto 5432 ya
+ocupado por otro contenedor postgres en el sistema). El puerto del API
+se cambió de 3000 a 3001 (puerto 3000 ocupado por servidor Next.js).
+Los puertos INTERNOS de los contenedores no se modificaron.
+
+--- docker compose ps ---
+
+NAME                  IMAGE                COMMAND                  SERVICE   CREATED              STATUS                        PORTS
+arquisoftware-api-1   arquisoftware-api    "docker-entrypoint.s…"   api       About a minute ago   Up About a minute             0.0.0.0:3001->3000/tcp, [::]:3001->3000/tcp
+arquisoftware-db-1    postgres:16-alpine   "docker-entrypoint.s…"   db        About a minute ago   Up About a minute (healthy)   0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+
+--- docker compose logs api ---
+
+api-1  | [server] Warehouse Inventory API running on port 3000
+api-1  | [server] Swagger UI: http://localhost:3000/api-docs
+api-1  | [ErrorHandler] duplicate key value violates unique constraint "products_sku_key"
+
+======================================================================
+ACTUALIZACIÓN — docker compose ps (post-fix, con healthcheck en api)
+Fecha: 2026-06-09
+======================================================================
+
+NAME                  IMAGE                COMMAND                  SERVICE   CREATED              STATUS                        PORTS
+arquisoftware-api-1   arquisoftware-api    "docker-entrypoint.s…"   api       About a minute ago   Up About a minute (healthy)   0.0.0.0:3001->3000/tcp, [::]:3001->3000/tcp
+arquisoftware-db-1    postgres:16-alpine   "docker-entrypoint.s…"   db        About a minute ago   Up About a minute (healthy)   0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+
+Nota: El contenedor api-1 ahora expone healthcheck propio y figura como
+      "(healthy)" igual que el contenedor db-1.
