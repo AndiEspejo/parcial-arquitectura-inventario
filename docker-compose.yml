@@ -43,5 +43,18 @@ services:
       DB_USER:     ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
 
+  # ---------------------------------------------------------------------------
+  # Web service — nginx serving the React SPA + reverse-proxying /api to API
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8081}:80"
+
 volumes:
   pgdata:

@@ -25,10 +25,11 @@ open http://localhost:3001/api-docs
 > **Variables de entorno**: crear un archivo `.env` copiando `.env.example`
 > (los valores por defecto funcionan tal cual con Docker Compose).
 
-> **Puertos**: la API se publica en el host en el puerto **3001** (interno 3000)
-> y PostgreSQL en el **5433** (interno 5432). Se eligieron a propósito para
-> evitar conflictos con los puertos de desarrollo más comunes (3000 y 5432).
-> El puerto de la API puede cambiarse con la variable `PORT` (ej. `PORT=4000 docker compose up`).
+> **Puertos**: la API se publica en el host en el puerto **3001** (interno 3000),
+> PostgreSQL en el **5433** (interno 5432) y el frontend en el **8081** (interno 80).
+> Se eligieron a propósito para evitar conflictos con los puertos de desarrollo
+> más comunes (3000, 5432 y 8080). Pueden cambiarse con las variables `PORT` y
+> `WEB_PORT` (ej. `PORT=4000 WEB_PORT=9090 docker compose up`).
 
 ---
 
@@ -45,6 +46,75 @@ open http://localhost:3001/api-docs
 | 7 | Códigos HTTP correctos + error handler centralizado + clase `HttpError` | `src/middleware/errorHandler.ts` + `src/types.ts` |
 | 8 | OpenAPI 3.0 + Swagger UI en `/api-docs` | `docs/openapi.yaml` + `swagger-ui-express` |
 | 9 | JSON en todos los endpoints | `express.json()` global + respuestas siempre `Content-Type: application/json` |
+| 10 ⭐ | **Frontend React** — SPA que consume la API con selección de almacén, vista de inventario y formulario de alta | `frontend/` — Vite + React 18 + TypeScript strict, servido por nginx con reverse-proxy a la API |
+
+---
+
+## Frontend (React)
+
+SPA en React 18 + TypeScript strict + Vite que consume la misma API REST.
+Servida por nginx, que también actúa de reverse-proxy hacia la API.
+
+### Qué hace
+
+| Feature | Detalle |
+|---------|---------|
+| **Selector de almacenes** | Carga `GET /api/warehouses` y muestra nombre + ciudad. Al seleccionar uno, carga su inventario. |
+| **Vista de inventario** | Tabla con nombre, SKU, descripción, precio y stock. Muestra info del almacén y total de productos. |
+| **Alta de producto** | Formulario con validación cliente (espejando las reglas del backend). Muestra el array `errors` en 400 y mensaje específico en 409 (SKU duplicado). Al completar el POST 201, refresca la tabla automáticamente. |
+| **Consumo de HATEOAS** | El cliente navega usando los `_links` de las respuestas del servidor (`followLink(links, rel)`) en lugar de hardcodear URLs. |
+
+### Cómo ejecutar
+
+**Con Docker Compose (recomendado):**
+
+```bash
+docker compose up --build
+# API REST disponible en:   http://localhost:3001/api-docs
+# Frontend disponible en:   http://localhost:8081
+```
+
+Para cambiar el puerto del frontend: `WEB_PORT=9090 docker compose up --build`
+
+**Modo desarrollo (contra la API dockerizada):**
+
+```bash
+# 1. Levantar la API
+docker compose up api db -d
+
+# 2. En otra terminal, instalar dependencias y arrancar el dev server de Vite
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173  (Vite proxy redirige /api → http://localhost:3001)
+```
+
+### Por qué nginx como reverse-proxy
+
+La SPA se sirve desde el mismo origen que las llamadas a `/api/*`, eliminando CORS por completo. El navegador solo ve un único origen (`http://localhost:8081`); nginx reenvía internamente a `http://api:3000`. Esta es la decisión correcta para producción: no requiere configurar `CORS` en el backend ni exponer headers adicionales, y el backend no necesita saber que existe un frontend.
+
+### Estructura del frontend
+
+```
+frontend/
+├── Dockerfile              # Multi-stage: node:20-alpine build → nginx:alpine serve
+├── nginx.conf              # SPA fallback + reverse-proxy /api → api:3000
+├── vite.config.ts          # Dev proxy /api → localhost:3001
+├── src/
+│   ├── api/
+│   │   ├── types.ts        # Tipos espejo del backend (HalLinks, Warehouse, Product…)
+│   │   └── client.ts       # Fetch wrapper + followLink() + fetchWarehouses/fetchInventory/createProduct
+│   ├── hooks/
+│   │   └── useInventory.ts # Estado del inventario (load + refresh)
+│   ├── components/
+│   │   ├── WarehouseSelector.tsx
+│   │   ├── InventoryPanel.tsx
+│   │   ├── ProductTable.tsx
+│   │   └── AddProductForm.tsx
+│   ├── App.tsx             # Raíz: compone Selector + Panel, owns selected warehouse state
+│   ├── main.tsx
+│   └── styles.css          # CSS plano, sin framework de UI
+```
 
 ---
 
@@ -84,16 +154,20 @@ tests/
 
 ```mermaid
 C4Container
-    title Warehouse Inventory API — Vista de Contenedores
+    title Warehouse Inventory — Vista de Contenedores
 
-    Person(dev, "Desarrollador / Cliente", "Consume la API con curl o Swagger UI")
+    Person(user, "Usuario / Estudiante", "Interactúa con la SPA en el navegador")
+    Person(dev, "Desarrollador", "Consume la API directamente con curl o Swagger UI")
 
     System_Boundary(compose, "Docker Compose") {
+        Container(web, "Web Container", "nginx + React 18 SPA", "Sirve la SPA en :80 (host :8081)\nReversa /api/* → api:3000")
         Container(api, "API Container", "Node.js 20 + Express + TypeScript", "Expone REST en :3000\nServe Swagger UI en /api-docs")
         ContainerDb(db, "PostgreSQL 16", "Postgres", "Almacena warehouses y products\nInicializado con init.sql")
     }
 
-    Rel(dev, api, "HTTP/REST", "X-API-Version: 1")
+    Rel(user, web, "HTTPS", "puerto 8081")
+    Rel(web, api, "HTTP reverse-proxy", "/api/* → :3000")
+    Rel(dev, api, "HTTP/REST", "X-API-Version: 1 · puerto 3001")
     Rel(api, db, "pg (node-postgres)", "TCP :5432\nParameterized queries")
 ```
 
