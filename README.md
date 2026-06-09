@@ -150,7 +150,29 @@ tests/
 
 ## Diagramas de arquitectura
 
-### C4 — Diagrama de contenedores
+### C4 
+### Diagrama de Contexto (Nivel 1) - Warehouse Inventory System
+
+```mermaid
+flowchart TD
+    %% Estilos basados en la paleta oficial del C4 Model
+    classDef person fill:#08427b,stroke:#052e56,color:#ffffff,rx:25px,ry:25px
+    classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff,rx:10px,ry:10px
+    classDef boundary fill:none,stroke:#666666,stroke-width:2px,stroke-dasharray: 5 5
+
+    %% Actores Externos
+    User["👤 Desarrollador / Cliente<br/>[Persona]<br/><br/>Desarrollador que prueba la API con cURL,<br/>Swagger UI o integra aplicaciones cliente."]:::person
+
+    %% Limite del sistema (Boundary)
+    subgraph Enterprise [" "]
+        System["⚙️ Warehouse Inventory API<br/>[Sistema de Software]<br/><br/>Sistema RESTful para gestionar el inventario<br/>de productos en múltiples almacenes."]:::system
+    end
+    class Enterprise boundary
+
+    %% Relaciones
+    User -- "Consume APIs (GET/POST)\ny lee documentación\n[HTTPS]" --> System 
+```
+### Diagrama de contenedores
 
 ```mermaid
 C4Container
@@ -193,6 +215,137 @@ graph TD
     DB -->|"SQL parametrizado"| PG[("PostgreSQL")]
 ```
 
+### Diagrama de Código
+```mermaid
+classDiagram
+    %% ==========================================
+    %% Entry Point & App Setup
+    %% ==========================================
+    class Server {
+        <<Entry Point>>
+        +PORT: number
+    }
+    
+    class App {
+        <<Express Application>>
+        +app: express.Application
+        +setupSwagger()
+    }
+
+    %% ==========================================
+    %% Middlewares
+    %% ==========================================
+    class ApiVersionMiddleware {
+        <<Middleware>>
+        -SUPPORTED_VERSIONS: string[]
+        +apiVersion(req, res, next)
+    }
+    
+    class ErrorHandlerMiddleware {
+        <<Middleware>>
+        +errorHandler(err, req, res, _next)
+    }
+
+    %% ==========================================
+    %% Routers
+    %% ==========================================
+    class WarehousesRouter {
+        <<Router>>
+        +GET /
+        +GET /:id
+        +POST /
+    }
+    class ProductsRouter {
+        <<Router>>
+        +GET /:id
+        +POST /
+    }
+    class InventoryRouter {
+        <<Router>>
+        +GET /
+    }
+
+    %% ==========================================
+    %% Controllers
+    %% ==========================================
+    class WarehousesController {
+        <<Controller>>
+        +listWarehouses(req, res, next)
+        +getWarehouse(req, res, next)
+        +createWarehouse(req, res, next)
+    }
+    class ProductsController {
+        <<Controller>>
+        +getProduct(req, res, next)
+        +createProduct(req, res, next)
+    }
+    class InventoryController {
+        <<Controller>>
+        +getInventory(req, res, next)
+    }
+
+    %% ==========================================
+    %% Helpers & Infrastructure
+    %% ==========================================
+    class Database {
+        <<Infrastructure>>
+        +pool: Pool
+    }
+    
+    class HateoasHelper {
+        <<Utility>>
+        +baseUrl(req): string
+        +link(rel, method, req, path): HalLink
+        +buildLinks(linksArray): HalLinks
+    }
+
+    %% ==========================================
+    %% Types & Interfaces (Domain)
+    %% ==========================================
+    class Types {
+        <<Interfaces>>
+        +Warehouse
+        +Product
+        +InventoryItem
+        +CreateWarehouseDto
+        +CreateProductDto
+        +HalLink
+        +HalLinks
+        +HttpError
+    }
+
+    %% ==========================================
+    %% Relationships & Dependencies
+    %% ==========================================
+    Server --> App : imports & runs
+
+    %% App configuration
+    App --> ApiVersionMiddleware : uses globally (/api)
+    App --> ErrorHandlerMiddleware : uses globally (last)
+    App --> WarehousesRouter : registers
+    App --> ProductsRouter : registers
+    App --> InventoryRouter : registers
+
+    %% Router to Controller mapping
+    WarehousesRouter --> WarehousesController : delegates
+    ProductsRouter --> ProductsController : delegates
+    InventoryRouter --> InventoryController : delegates
+
+    %% Controllers dependencies
+    WarehousesController --> Database : executes pool.query()
+    ProductsController --> Database : executes pool.query()
+    InventoryController --> Database : executes pool.query()
+
+    WarehousesController --> HateoasHelper : injects _links
+    ProductsController --> HateoasHelper : injects _links
+    InventoryController --> HateoasHelper : injects _links
+
+    %% Types dependencies
+    ErrorHandlerMiddleware ..> Types : handles HttpError
+    WarehousesController ..> Types : casts & validates DTOs
+    ProductsController ..> Types : casts & validates DTOs
+    InventoryController ..> Types : uses Interfaces
+```
 ---
 
 ## Ejemplos con curl
