@@ -1,8 +1,7 @@
 # API REST de Inventario de Almacenes
 
 API RESTful para la gestión de inventario de productos en múltiples almacenes.
-Construida con **Node.js + Express + PostgreSQL + TypeScript estricto**, sin ORM.
-Entregable del Parcial Práctico de Arquitectura de Software.
+Construida con **Node.js + Express + PostgreSQL + TypeScript, sin ORM.
 
 ---
 
@@ -33,7 +32,7 @@ open http://localhost:3001/api-docs
 
 ---
 
-## Cumplimiento de requisitos del examen
+## Cumplimiento de requisitos
 
 | # | Requisito del examen | Implementación |
 |---|---------------------|----------------|
